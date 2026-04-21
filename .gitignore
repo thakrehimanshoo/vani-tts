@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Build / dist
+build/
+dist/
+
+# Model caches and outputs
+~/.local/share/tts/
+.tts_cache/
+outputs/
+*.wav
+*.mp3
+*.flac
+*.srt
+*.vtt
+!examples/*.wav
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
