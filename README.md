@@ -37,8 +37,10 @@ Bark cannot sustain tone across chunks. Piper is fast but flat.
 vani-tts/
 ├── README.md
 ├── requirements.txt
-├── setup.sh                   # one-shot installer (CUDA + deps)
-├── tts.py                     # CLI entry point
+├── setup.ps1                  # Windows installer (PowerShell, primary)
+├── setup.bat                  # Windows installer (CMD fallback)
+├── setup.sh                   # Linux/macOS installer
+├── tts.py                     # CLI entry point (cross-platform)
 ├── .gitignore
 ├── vani_tts/
 │   ├── __init__.py
@@ -55,7 +57,9 @@ vani-tts/
 │   └── server.py              # FastAPI wrapper
 ├── examples/
 │   ├── sample_input.txt
-│   └── run_example.sh
+│   ├── run_example.ps1        # Windows PowerShell
+│   ├── run_example.bat        # Windows CMD
+│   └── run_example.sh         # Linux/macOS
 └── tests/
     ├── test_chunker.py
     └── test_emotion.py
@@ -63,61 +67,120 @@ vani-tts/
 
 ---
 
-## Setup guide
+## Setup guide (Windows — primary)
 
 ### 1. System prerequisites
 
-- NVIDIA driver ≥ 535
-- CUDA 12.1 runtime (the PyTorch wheel bundles it — you only need the driver)
-- Python 3.10 or 3.11 (Coqui TTS is not yet packaged for 3.12)
-- ffmpeg (`sudo apt install ffmpeg`)
-- ~6 GB free disk for model weights
+- **Windows 10 / 11** with an NVIDIA GPU (3050+ recommended)
+- **NVIDIA driver** ≥ 535 (install the latest Game Ready or Studio driver from
+  https://www.nvidia.com/Download/index.aspx — the CUDA runtime is bundled
+  with the PyTorch wheel, so you do *not* need to install CUDA Toolkit
+  separately)
+- **Python 3.10 or 3.11** from https://www.python.org/downloads/windows/
+  (tick "Add python.exe to PATH" during install). Coqui TTS is not yet
+  packaged for 3.12.
+- **ffmpeg**. Easiest install:
+  ```powershell
+  winget install Gyan.FFmpeg
+  ```
+  Or with Chocolatey: `choco install ffmpeg`. Verify with `ffmpeg -version`.
+- ~6 GB free disk for model weights.
 
 ### 2. Install
+
+Open **PowerShell** in the project folder:
+
+```powershell
+git clone https://github.com/thakrehimanshoo/vani-tts.git
+cd vani-tts
+.\setup.ps1
+```
+
+If PowerShell blocks the script ("running scripts is disabled on this
+system"), bypass it for this one run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup.ps1
+```
+
+Prefer plain **Command Prompt**? Use the batch installer instead:
+
+```cmd
+setup.bat
+```
+
+Either installer creates a `.venv`, installs the CUDA 12.1 PyTorch wheels,
+installs `requirements.txt`, pre-downloads XTTS v2 weights (~2 GB), and
+accepts the Coqui TOS non-interactively.
+
+### 3. Activate the venv (every new shell)
+
+PowerShell:
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Command Prompt:
+```cmd
+.venv\Scripts\activate.bat
+```
+
+### 4. First run (smoke test)
+
+```powershell
+python tts.py --input examples\sample_input.txt --output out.wav
+```
+
+Or use the bundled example runner:
+
+```powershell
+.\examples\run_example.ps1        # PowerShell
+examples\run_example.bat          # CMD
+```
+
+### 5. Voice cloning
+
+Record 10–30 s of clean speech (mono, 16 kHz+, no background music) and pass
+it:
+
+```powershell
+python tts.py `
+    --input book.txt `
+    --output book.wav `
+    --speaker-wav my_voice.wav `
+    --emotion storytelling `
+    --rate 0.95
+```
+
+### 6. Long-form (1 hour)
+
+```powershell
+python tts.py `
+    --input novel_chapter.txt `
+    --output chapter.wav `
+    --speaker-wav my_voice.wav `
+    --emotion dramatic `
+    --subtitles chapter.srt `
+    --stream
+```
+
+`--stream` writes each chunk to disk as it is generated and only crossfades
+at the end, so VRAM stays flat regardless of input length.
+
+---
+
+## Setup guide (Linux / macOS)
+
+Same tooling, different shell. Requires an NVIDIA driver on Linux; macOS runs
+CPU-only and will be slow.
 
 ```bash
 git clone https://github.com/thakrehimanshoo/vani-tts.git
 cd vani-tts
 bash setup.sh
-```
-
-`setup.sh` creates a venv, installs PyTorch with CUDA 12.1, installs Coqui TTS
-and the rest of `requirements.txt`, and pre-downloads XTTS v2 weights.
-
-### 3. First run (smoke test)
-
-```bash
 source .venv/bin/activate
 python tts.py --input examples/sample_input.txt --output out.wav
 ```
-
-### 4. Voice cloning
-
-Record 10–30 s of clean speech (mono, 16 kHz+, no background music) and pass it:
-
-```bash
-python tts.py \
-    --input book.txt \
-    --output book.wav \
-    --speaker-wav my_voice.wav \
-    --emotion storytelling \
-    --rate 0.95
-```
-
-### 5. Long-form (1 hour)
-
-```bash
-python tts.py \
-    --input novel_chapter.txt \
-    --output chapter.wav \
-    --speaker-wav my_voice.wav \
-    --emotion dramatic \
-    --subtitles chapter.srt \
-    --stream
-```
-
-`--stream` writes each chunk to disk as it is generated and only crossfades at
-the end, so VRAM stays flat regardless of input length.
 
 ---
 
@@ -224,6 +287,14 @@ explicit silence insertions (see `emotion.py::insert_pauses`).
 
 ## API
 
+Windows (PowerShell or CMD, with the venv activated):
+
+```powershell
+uvicorn api.server:app --host 0.0.0.0 --port 8000
+```
+
+Linux / macOS:
+
 ```bash
 uvicorn api.server:app --host 0.0.0.0 --port 8000
 ```
@@ -251,5 +322,17 @@ See `api/server.py` for the full schema.
 - **Clicks between chunks** — raise `--crossfade-ms` to 50.
 - **Voice drift** — ensure your `--speaker-wav` is mono, 22 kHz+, 10–30 s,
   speech only.
+- **"Running scripts is disabled on this system"** (Windows) — run the
+  installer as:
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .\setup.ps1
+  ```
+  Or use `setup.bat` from Command Prompt instead.
+- **`'python' is not recognized`** (Windows) — either re-install Python with
+  "Add python.exe to PATH" ticked, or use the `py` launcher (`py -3.11 ...`).
+- **`ffmpeg not found`** (Windows) — `winget install Gyan.FFmpeg`, then open
+  a new shell so PATH refreshes.
+- **torch installed but `torch.cuda.is_available()` is False** — your NVIDIA
+  driver is too old. Update to ≥535 from nvidia.com.
 - **License** — XTTS v2 is released under Coqui's non-commercial license.
   Check `https://coqui.ai/cpml` before commercial use.
