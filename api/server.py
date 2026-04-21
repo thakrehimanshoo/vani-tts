@@ -114,9 +114,13 @@ async def synthesize(
 
         # FileResponse streams the file, then a background task can clean up.
         # We detach the temp dir by copying to a tmpfile FastAPI owns.
-        final = Path(tempfile.NamedTemporaryFile(
+        # On Windows you can't reopen a NamedTemporaryFile while its handle is
+        # still open, so close it explicitly before copying into it.
+        tmp = tempfile.NamedTemporaryFile(
             prefix=f"vani_{job_id}_", suffix=".wav", delete=False
-        ).name)
+        )
+        tmp.close()
+        final = Path(tmp.name)
         shutil.copyfile(output_path, final)
         return FileResponse(
             final,
